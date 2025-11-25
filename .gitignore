@@ -1,0 +1,10 @@
+
+# Runtime artifacts
+monitor_state.json
+monitor.log
+config.json
+__pycache__/
+*.pyc
+.env
+*.log
+.DS_Store

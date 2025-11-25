@@ -1,0 +1,27 @@
+{
+    "state_file": "monitor_state.json",
+    "log_file": "sample_logs/auth_sample.log",
+    "thresholds": {
+        "cpu_percent": 85,
+        "mem_percent": 85,
+        "disk_percent": 90
+    },
+    "log_patterns": [
+        "error",
+        "fail",
+        "critical",
+        "unauthorized"
+    ],
+    "smtp": {
+        "server": "smtp.gmail.com",
+        "port": 587,
+        "use_tls": true,
+        "username": "your-email@example.com",
+        "password": "your-app-password-here",
+        "from": "your-email@example.com",
+        "to": [
+            "recipient@example.com"
+        ]
+    },
+    "alert_subject": "ALERT: Linux Monitor"
+}

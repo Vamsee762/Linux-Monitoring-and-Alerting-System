@@ -1,0 +1,1 @@
+*/5 * * * * /usr/bin/python3 /path/to/monitor_project/monitor.py --once --config /path/to/monitor_project/config.json

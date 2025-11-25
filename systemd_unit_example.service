@@ -1,0 +1,14 @@
+
+[Unit]
+Description=Linux System Monitor (MVP)
+After=network.target
+
+[Service]
+Type=simple
+User=root
+ExecStart=/usr/bin/python3 /opt/monitor_project/monitor.py --interval 60 --config /opt/monitor_project/config.json
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

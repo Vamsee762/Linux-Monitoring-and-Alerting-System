@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Monitor Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="bg-slate-50 text-slate-800">
+  <div class="max-w-7xl mx-auto p-6">
+    <header class="flex items-center justify-between mb-6">
+      <div>
+        <h1 class="text-2xl font-semibold">Linux Monitor — Dashboard</h1>
+        <p class="text-sm text-slate-500 mt-1">Lightweight web UI for the monitoring & alerting tool</p>
+      </div>
+      <div class="flex items-center gap-3">
+        <button id="runBtn" class="bg-indigo-600 text-white px-4 py-2 rounded shadow hover:bg-indigo-700">Run Check</button>
+        <a href="/" class="text-sm text-slate-500">Refresh</a>
+      </div>
+    </header>
+
+    <main class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <!-- Snapshot card -->
+      <section class="lg:col-span-1 bg-white p-4 rounded shadow">
+        <h2 class="font-medium text-lg mb-2">Latest Snapshot</h2>
+        <div id="snapshot" class="text-sm text-slate-700">
+          {% if last_snapshot %}
+            <div class="space-y-1">
+              <div>CPU: <strong>{{ last_snapshot.get("cpu_percent","-") }}%</strong></div>
+              <div>Memory: <strong>{{ last_snapshot.get("mem_percent","-") }}%</strong></div>
+              <div>Disk: <strong>{{ last_snapshot.get("disk_percent","-") }}%</strong></div>
+              <div class="text-xs text-slate-400">Net sent: {{ last_snapshot.get("net_bytes_sent","-") }}, recv: {{ last_snapshot.get("net_bytes_recv","-") }}</div>
+            </div>
+          {% else %}
+            <div class="text-slate-400">No snapshot available yet.</div>
+          {% endif %}
+        </div>
+
+        <div class="mt-4">
+          <h3 class="text-sm font-medium">Active Warnings</h3>
+          {% if warnings %}
+            <ul id="warningsList" class="mt-2 space-y-2 text-sm">
+              {% for w in warnings %}
+                <li class="bg-amber-50 text-amber-900 p-2 rounded border border-amber-100">{{ w }}</li>
+              {% endfor %}
+            </ul>
+          {% else %}
+            <div class="text-slate-400 mt-2">No warnings in recent logs.</div>
+          {% endif %}
+        </div>
+      </section>
+
+      <!-- Chart + controls -->
+      <section class="lg:col-span-2 bg-white p-4 rounded shadow">
+        <div class="flex justify-between items-center mb-3">
+          <h2 class="font-medium text-lg">Metrics & Logs</h2>
+          <div class="text-sm text-slate-400">Newest first</div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
+          <div class="lg:col-span-2">
+            <canvas id="metricsChart" height="120"></canvas>
+          </div>
+          <div class="p-2">
+            <label class="block text-xs text-slate-500 mb-1">Log Search</label>
+            <input id="logSearch" type="text" placeholder="filter logs (keyword/ERROR/WARNING)" class="w-full p-2 border rounded" />
+            <div class="mt-2 text-xs text-slate-400">Type to filter visible logs instantly</div>
+          </div>
+        </div>
+
+        <div id="logContainer" class="h-96 overflow-auto bg-slate-50 p-3 rounded border border-slate-100">
+          {% for line in log_lines %}
+            <div class="log-line text-xs font-mono {% if 'ERROR' in line or 'WARNING' in line %}text-amber-800{% else %}text-slate-600{% endif %} mb-1">
+              {{ line }}
+            </div>
+          {% else %}
+            <div class="text-slate-400">No logs found.</div>
+          {% endfor %}
+        </div>
+      </section>
+    </main>
+
+    <footer class="mt-6 text-xs text-slate-500">
+      <div>State file log_pos: {{ last_pos }}</div>
+      <div class="mt-2">Tip: Use the <strong>Run Check</strong> button to trigger an immediate check (runs monitor.py once).</div>
+    </footer>
+  </div>
+
+  <script>
+    // Embedded history data from server
+    const history = {{ history | tojson | safe }};
+
+    // build chart data arrays
+    const labels = history.map(h => h.ts);
+    const cpuData = history.map(h => h.cpu);
+    const memData = history.map(h => h.mem);
+    const diskData = history.map(h => h.disk);
+
+    const ctx = document.getElementById('metricsChart').getContext('2d');
+    const metricsChart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: labels,
+        datasets: [
+          {
+            label: 'CPU %',
+            data: cpuData,
+            tension: 0.25,
+            borderWidth: 2,
+            pointRadius: 1
+          },
+          {
+            label: 'Memory %',
+            data: memData,
+            tension: 0.25,
+            borderWidth: 2,
+            pointRadius: 1
+          },
+          {
+            label: 'Disk %',
+            data: diskData,
+            tension: 0.25,
+            borderWidth: 2,
+            pointRadius: 1
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          y: { beginAtZero: true, max: 100 }
+        }
+      }
+    });
+
+    // Run button triggers backend run
+    document.getElementById('runBtn').addEventListener('click', async () => {
+      const btn = document.getElementById('runBtn');
+      btn.disabled = true;
+      btn.textContent = 'Running...';
+      try {
+        const res = await fetch('/api/run', {method: 'POST'});
+        const data = await res.json();
+        alert('Monitor run finished. Check logs below.');
+        location.reload();
+      } catch (e) {
+        alert('Failed to run: ' + e);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Run Check';
+      }
+    });
+
+    // Log search (client-side filter)
+    const searchInput = document.getElementById('logSearch');
+    const logContainer = document.getElementById('logContainer');
+    searchInput.addEventListener('input', (e) => {
+      const q = e.target.value.trim().toLowerCase();
+      const lines = Array.from(document.getElementsByClassName('log-line'));
+      if (!q) {
+        lines.forEach(l => l.style.display = '');
+        return;
+      }
+      lines.forEach(l => {
+        const txt = l.textContent.toLowerCase();
+        if (txt.includes(q)) l.style.display = '';
+        else l.style.display = 'none';
+      });
+    });
+  </script>
+</body>
+</html>
